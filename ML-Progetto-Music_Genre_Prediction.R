@@ -1,0 +1,301 @@
+# Installazione e caricamento delle librerie utilizzate
+
+#install.packages(c("FactoMineR", "factoextra"))
+#install.packages("randomForest")
+#install.packages("caret")
+#install.packages("C50")
+#install.packages('MLmetrics')
+library(MLmetrics)
+library(FactoMineR)
+library(factoextra)
+library(randomForest)
+library(C50)
+library(caret)
+library(e1071)
+library(dplyr)
+library(corrplot)
+library(neuralnet)
+library(tidyr)
+
+### Machine Learning - Progetto [Music-Genre-Prediction]
+## Salvatore Marotta 844795
+## Alessio Mognato 844953
+
+
+# Descrizione introduttiva del progetto: 
+# In questo progetto si utilizzano tre modelli di machine learning per la 
+# predizione del genere musicale di alcuni brani in base a caratteristiche
+# come il tempo, l'acustica, la popolarità, la strumentalità e altre features
+# che caratterizzano i brani stessi.
+
+# link dataset: https://www.kaggle.com/vicsuperman/prediction-of-music-genre
+
+# Download del dataset: 
+
+url_dataset <- "https://www.kaggle.com/vicsuperman/prediction-of-music-genre?select=music_genre.csv"
+url_destination <- getwd()
+
+download.file(url_dataset, url_destination)
+
+# Caricamento dataset da file csv
+
+music_dataset <- read.csv("music_genre.csv", header = TRUE)
+
+# Dimensione dataset
+dim(music_dataset)
+
+# Stampa di n righe random del dataset
+
+sample_n(music_dataset, 5)
+summary(music_dataset)
+
+# Verifica e rimozione di eventuali righe duplicate e con valori NA nelle colonne
+
+music_dataset <- na.omit(music_dataset)  
+
+music_dataset <- music_dataset[complete.cases(music_dataset),]
+dim(music_dataset[rowSums(is.na(music_dataset)) > 0, ])
+music_dataset %>% drop_na()
+
+# Reset dell'index dopo la cancellazione di alcune righe
+
+row.names(music_dataset) <- NULL
+
+dim(music_dataset)
+
+
+# Labels del genere musicale e distrubuzione dei generi musicali nel df
+
+lables <- unique(music_dataset$music_genre)
+
+table(music_dataset$music_genre)
+
+# Rimozione delle colonne rappresentanti feature inutili alla classificazione con i modelli
+# quindi, principalmente si eliminano i caratteri qualitativi che non saranno trasformati in factors
+
+music_dataset <- within(music_dataset, rm('instance_id', 'track_name', 'obtained_date', 'index', 'artist_name'))
+dim(music_dataset)
+sample_n(music_dataset, 5)
+
+# Codifica delle colonne con valori qualitativi attraverso factors(x, levels)
+# Per utilizzare nei modelli le colonne "key" e "mode" si codificano mappandone i valori
+# al fine di renderli valori numerici
+
+# "mode" - codifica in valori pari a 1 o 2 (majior o minor)
+# "key" - codifica fino a 12 valori (suoni note musicali)
+
+encode_ordinal <- function(x, order = unique(x)) {
+  x <- as.numeric(factor(x, levels = order, exclude = NULL))
+  x
+}
+
+music_dataset[["key"]] <- encode_ordinal(music_dataset[["key"]])
+head(music_dataset)
+
+music_dataset[["mode"]] <- encode_ordinal(music_dataset[["mode"]])
+head(music_dataset)
+
+music_dataset$tempo <- as.double(music_dataset$tempo)
+head(music_dataset)
+
+# Trasformazione delle lables da type: chr a type: factor
+
+music_dataset$music_genre = as.factor(music_dataset$music_genre)
+str(music_dataset)
+dim(music_dataset)
+
+# Verifica e rimozione dei valori NA dopo la codifica delle features "key" e "mode"
+
+music_dataset <- na.omit(music_dataset)  
+
+music_dataset <- music_dataset[complete.cases(music_dataset),]
+dim(music_dataset[rowSums(is.na(music_dataset)) > 0, ])
+music_dataset %>% drop_na()
+
+music_dataset <- music_dataset[ , c("music_genre")]
+
+# Plotting ed eliminazione degli outliers
+
+# plotting per ogni colonna
+for (i in colnames(music_dataset)){
+boxplot(music_dataset[[i]],
+        main = paste("Boxplot", i),
+        xlab = "values",
+        ylab =  i,
+        col = "cyan",
+        border = "blue",
+        horizontal = TRUE,
+        notch = FALSE
+)}
+
+head(music_dataset)
+z_scores <- as.data.frame(sapply(music_dataset, function(music_dataset) (abs(music_dataset-mean(music_dataset))/sd(music_dataset))))
+no_outliers <- z_scores[!rowSums(z_scores>3), ]
+head(no_outliers)
+
+
+# Shuffle del dataset
+music_dataset = music_dataset[sample(1:nrow(music_dataset)), ]
+
+# Normalizzazione del dataset per tutte le features con dominio numerico
+
+process <- preProcess(as.data.frame(music_dataset), method=c("range"))
+
+music_dataset <- predict(process, as.data.frame(music_dataset))
+
+# Visualizzazione istogrammi per ogni feature
+
+par(mfrow=c(3,3))
+hist(music_dataset$popularity, freq=F, main="Istogramma popularity", xlab="populariy", col = "green")
+hist(music_dataset$acousticness, freq=F, main="Istogramma acousticness", xlab="acousticness", col = "red")
+hist(music_dataset$danceability, freq=F, main="Istogramma danceability", xlab="danceability", col = "white")
+hist(music_dataset$duration_ms, freq=F, main="Istogramma duration_ms", xlab="duration_ms", col = "yellow")
+hist(music_dataset$energy, freq=F, main="Istogramma energy", xlab="energy", col = "orange")
+hist(music_dataset$instrumentalness, freq=F, main="Istogramma instrumentalness", xlab="instrumentalness", col = "blue")
+hist(music_dataset$key, freq=F, main="Istogramma key", xlab="key", col = "purple")
+hist(music_dataset$liveness, freq=F, main="Istogramma liveness", xlab="liveness", col = "cyan")
+hist(music_dataset$loudness, freq=F, main="Istogramma loudness", xlab="loudness", col = "gray")
+
+par(mfrow=c(2,2))
+hist(music_dataset$mode, freq=F, main="Istogramma mode", xlab="mode", col = "green")
+hist(music_dataset$speechiness, freq=F, main="Istogramma speechiness", xlab="speechiness", col = "red")
+hist(music_dataset$tempo, freq=F, main="Istogramma tempo", xlab="tempo", col = "blue")
+hist(music_dataset$valence, freq=F, main="Istogramma valence", xlab="valence", col = "orange")
+
+
+# Split del dataset in:
+# training_set: 65%
+# testing_set: 25%
+# validation_set: 10%
+
+train_prop <- 0.65
+test_prop <- 0.25
+vald_prop = 1 - train_prop - test_prop
+
+indices <- sample(x = rep.int(x = c(0, 1, 2), times = round(nrow(music_dataset) * c(vald_prop, train_prop, test_prop))))
+training_set <- music_dataset[indices == 1,]
+testing_set <- music_dataset[indices == 2,]
+validation_set <- music_dataset[indices == 0,]
+
+dim(music_dataset)
+dim(training_set)
+dim(testing_set)
+dim(validation_set)
+
+# PCA sul traninig_set
+
+pca_set = training_set[,-14]
+res.pca <- PCA(pca_set, scale.unit = TRUE, ncp = 5, graph = TRUE)
+
+# autovalori
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+# var
+var <- get_pca_var(res.pca)
+var
+
+# Scree plot
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50))
+
+# Correlation plot su var cos2
+corrplot(var$cos2, is.corr=FALSE)
+
+# Correlation plot su var contrib
+corrplot(var$contrib, is.corr=FALSE)    
+
+# Contributions of variables to PC1 and PC2
+fviz_pca_ind(res.pca,
+             geom.ind = "point", # show points only (nbut not "text")
+             col.ind = training_set$music_genre, # color by groups
+             palette = c("#ff0000", "#ff8000", "#ffff00","#80ff00","#00ff00","#00ff80","#00ffff","#00ffff","#0000ff","#8000ff","#ff00ff","#ff0080"),
+             addEllipses = TRUE, # Concentration ellipses
+             legend.title = "Groups",
+             title = "Contrb by each music genre"
+)
+
+# Biplot identificazione top features
+
+top_features <- fviz_pca_biplot(res.pca, select.ind = list(contrib = 5),
+                                select.var = list(contrib = 5))
+
+top_features
+
+par(mfrow=c(2,3))
+plot(training_set$danceability, main="Danzabilità", col="green") 
+plot(training_set$acousticness, main="Acustica", col="red")
+plot(training_set$instrumentalness, main="Strumentalità", col="blue")
+plot(training_set$energy, main="Energia", col="orange")
+plot(training_set$loudness, main="Rumorosità", col="black")
+
+
+## Primo modello : SVM
+
+svm.model = svm(music_genre ~ ., data=training_set, kernel='radial', cost=1)
+summary(svm.model)
+
+## Secondo modello: Random Forest
+randomForest.model = randomForest(music_genre ~ ., data=training_set, importance = TRUE)
+summary(randomForest.model)
+
+
+## Predictions
+
+svm.pred = predict(svm.model, testing_set)
+randomForest.pred = predict(randomForest.model, testing_set)
+
+length(randomForest.pred)
+length(testing_set$music_genre)
+
+randomForest.table = table(randomForest.pred, testing_set$music_genre)
+randomForest.table
+accuracy.RF <- sum(diag(randomForest.table))/sum(randomForest.table)
+print(accuracy.RF)
+
+svm.table=table(svm.pred, testing_set$music_genre)
+svm.table
+accuracy.SVM <- sum(diag(svm.table))/sum(svm.table)
+print(accuracy.SVM)
+
+#  K-Fold Cross-Validation
+
+
+# svm.confusionMatrix
+svm.confusionMatrix = confusionMatrix(svm.pred, testing_set$music_genre, mode = "everything") 
+print(svm.confusionMatrix)
+svm.confusionMatrix$overall[1]
+
+# randomForest.confusionMatrix
+randomForest.confusionMatrix = confusionMatrix(randomForest.pred, testing_set$music_genre, mode = "everything") 
+randomForest.confusionMatrix$overall[1]
+
+
+## Neural networks
+training_set_nn <- data.frame(training_set$danceability, training_set$acousticness, training_set$instrumentalness, training_set$energy, training_set$loudness, training_set$music_genre)
+names(training_set_nn) <- c('danceability','acousticness','instrumentalness','energy','loudness','music_genre')
+head(training_set_nn)
+
+
+network = neuralnet(music_genre~ danceability + acousticness + instrumentalness + energy + loudness, data = training_set_nn, hidden=3)
+
+network$startweights
+network$weights
+plot(network)
+
+#plots covariate
+
+par(mfrow=c(2,3))
+gwplot(network,selected.covariate="danceability")
+gwplot(network,selected.covariate="acousticness")
+gwplot(network,selected.covariate="instrumentalness")
+gwplot(network,selected.covariate="energy")
+gwplot(network,selected.covariate="loudness")
+
+# prediction
+
+net.predict = compute(network, testing_set)$net.result
+net.prediction = lables[apply(net.predict, 1, which.max)]
+predict.table = table(testing_set$music_genre, net.prediction) 
+print(predict.table)
+accuracy.NN <- sum(diag(predict.table))/sum(predict.table)
+print(accuracy.NN)
+
