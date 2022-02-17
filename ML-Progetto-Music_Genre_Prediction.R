@@ -112,7 +112,7 @@ music_dataset <- music_dataset[complete.cases(music_dataset),]
 dim(music_dataset[rowSums(is.na(music_dataset)) > 0, ])
 music_dataset %>% drop_na()
 
-music_dataset <- music_dataset[ , c("music_genre")]
+#music_dataset <- music_dataset[ , c("music_genre")]
 
 # Plotting ed eliminazione degli outliers
 
@@ -129,8 +129,8 @@ boxplot(music_dataset[[i]],
 )}
 
 head(music_dataset)
-z_scores <- as.data.frame(sapply(music_dataset, function(music_dataset) (abs(music_dataset-mean(music_dataset))/sd(music_dataset))))
-no_outliers <- z_scores[!rowSums(z_scores>3), ]
+z_scores = as.data.frame(sapply(music_dataset, function(music_dataset) (abs(music_dataset-mean(music_dataset))/sd(music_dataset))))
+no_outliers = z_scores[!rowSums(z_scores>3), ]
 head(no_outliers)
 
 
@@ -162,6 +162,8 @@ hist(music_dataset$speechiness, freq=F, main="Istogramma speechiness", xlab="spe
 hist(music_dataset$tempo, freq=F, main="Istogramma tempo", xlab="tempo", col = "blue")
 hist(music_dataset$valence, freq=F, main="Istogramma valence", xlab="valence", col = "orange")
 
+# TESTING:
+music_dataset <- music_dataset[, c("speechiness","tempo","key","mode","loudness", "music_genre")]
 
 # Split del dataset in:
 # training_set: 65%
@@ -256,7 +258,6 @@ svm.table
 accuracy.SVM <- sum(diag(svm.table))/sum(svm.table)
 print(accuracy.SVM)
 
-#  K-Fold Cross-Validation
 
 
 # svm.confusionMatrix
