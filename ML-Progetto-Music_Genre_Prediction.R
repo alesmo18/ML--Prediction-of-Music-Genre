@@ -306,33 +306,33 @@ eachfold <- pred %>%
                list(Accuracy = mean))              
 eachfold
 
-## Neural networks
-training_set_nn <- data.frame(training_set$danceability, training_set$acousticness, training_set$instrumentalness, training_set$energy, training_set$loudness, training_set$music_genre)
-names(training_set_nn) <- c('danceability','acousticness','instrumentalness','energy','loudness','music_genre')
-head(training_set_nn)
+## Neural network
+#training_set_nn <- data.frame(training_set$danceability, training_set$acousticness, training_set$instrumentalness, training_set$energy, training_set$loudness, training_set$key, training_set$liveness, training_set$music_genre)
+#names(training_set_nn) <- c('danceability','acousticness','instrumentalness','energy','loudness','key','liveness','music_genre')
+#head(training_set_nn)
 
 
-network = neuralnet(music_genre~ danceability + acousticness + instrumentalness + energy + loudness, data = training_set_nn, hidden=3)
+#network = neuralnet(music_genre~ danceability + acousticness + instrumentalness + energy + loudness + key + liveness, data = training_set_nn, hidden=3)
 
-network$startweights
-network$weights
-plot(network)
+#network$startweights
+#network$weights
+#plot(network)
 
 #plots covariate
 
-par(mfrow=c(2,3))
-gwplot(network,selected.covariate="danceability")
-gwplot(network,selected.covariate="acousticness")
-gwplot(network,selected.covariate="instrumentalness")
-gwplot(network,selected.covariate="energy")
-gwplot(network,selected.covariate="loudness")
+#par(mfrow=c(2,3))
+#gwplot(network,selected.covariate="danceability")
+#gwplot(network,selected.covariate="acousticness")
+#gwplot(network,selected.covariate="instrumentalness")
+#gwplot(network,selected.covariate="energy")
+#gwplot(network,selected.covariate="loudness")
 
 # prediction
 
-net.predict = compute(network, testing_set)$net.result
-net.prediction = lables[apply(net.predict, 1, which.max)]
-predict.table = table(testing_set$music_genre, net.prediction) 
-print(predict.table)
-accuracy.NN <- sum(diag(predict.table))/sum(predict.table)
-print(accuracy.NN)
+#net.predict = compute(network, testing_set)$net.result
+#net.prediction = lables[apply(net.predict, 1, which.max)]
+#predict.table = table(testing_set$music_genre, net.prediction) 
+#print(predict.table)
+#accuracy.NN <- sum(diag(predict.table))/sum(predict.table)
+#print(accuracy.NN)
 
