@@ -6,6 +6,7 @@
 #install.packages("C50")
 #install.packages('MLmetrics')
 #install.packages("magrittr") 
+#install.packages("tidyverse")
 library(MLmetrics)
 library(FactoMineR)
 library(factoextra)
@@ -18,6 +19,7 @@ library(corrplot)
 library(neuralnet)
 library(tidyr)
 library(magrittr)
+library(tidyverse) 
 
 ### Machine Learning - Progetto [Music-Genre-Prediction]
 ## Salvatore Marotta 844795
@@ -286,6 +288,23 @@ svm.confusionMatrix$overall[1]
 randomForest.confusionMatrix = confusionMatrix(randomForest.pred, testing_set$music_genre, mode = "everything") 
 randomForest.confusionMatrix$overall[1]
 
+
+## K-Fold Cross Validation method
+# Setting a seed (reproduce results)
+# K = 10
+set.seed(123)
+trainControl <- trainControl(method = "cv", number = 10, savePredictions=TRUE)
+svm_fit <- train(music_genre ~ ., data=music_dataset, method = "svmLinear", trControl=trainControl, tuneLength = 0, importance=T)
+svm_fit
+
+pred <- svm_fit$pred
+pred$equal <- ifelse(pred$pred == pred$obs, 1,0)
+
+eachfold <- pred %>%                                        
+  group_by(Resample) %>%                         
+  summarise_at(vars(equal),                     
+               list(Accuracy = mean))              
+eachfold
 
 ## Neural networks
 training_set_nn <- data.frame(training_set$danceability, training_set$acousticness, training_set$instrumentalness, training_set$energy, training_set$loudness, training_set$music_genre)
