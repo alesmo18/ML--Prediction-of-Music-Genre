@@ -5,6 +5,7 @@
 #install.packages("caret")
 #install.packages("C50")
 #install.packages('MLmetrics')
+#install.packages("magrittr") 
 library(MLmetrics)
 library(FactoMineR)
 library(factoextra)
@@ -16,6 +17,7 @@ library(dplyr)
 library(corrplot)
 library(neuralnet)
 library(tidyr)
+library(magrittr)
 
 ### Machine Learning - Progetto [Music-Genre-Prediction]
 ## Salvatore Marotta 844795
@@ -72,6 +74,7 @@ table(music_dataset$music_genre)
 
 # Rimozione delle colonne rappresentanti feature inutili alla classificazione con i modelli
 # quindi, principalmente si eliminano i caratteri qualitativi che non saranno trasformati in factors
+# in particolare si eliminano le features che non influenzerebbero la classificazione
 
 music_dataset <- within(music_dataset, rm('instance_id', 'track_name', 'obtained_date', 'index', 'artist_name'))
 dim(music_dataset)
@@ -98,6 +101,11 @@ head(music_dataset)
 music_dataset$tempo <- as.double(music_dataset$tempo)
 head(music_dataset)
 
+# Eliminazione delle righe con feature: duration_ms pari a -1
+# quindi dei brani con durata non presente nel dataset
+
+music_dataset <- filter(music_dataset, duration_ms != -1)
+
 # Trasformazione delle lables da type: chr a type: factor
 
 music_dataset$music_genre = as.factor(music_dataset$music_genre)
@@ -112,36 +120,41 @@ music_dataset <- music_dataset[complete.cases(music_dataset),]
 dim(music_dataset[rowSums(is.na(music_dataset)) > 0, ])
 music_dataset %>% drop_na()
 
-#music_dataset <- music_dataset[ , c("music_genre")]
+
+# Normalizzazione del dataset per tutte le features con dominio numerico
+
+process <- preProcess(as.data.frame(music_dataset), method=c("center", "scale"))
+
+music_dataset <- predict(process, as.data.frame(music_dataset))
+
+glimpse(music_dataset)
+summary(music_dataset)
+table(music_dataset$music_genre)
 
 # Plotting ed eliminazione degli outliers
 
 # plotting per ogni colonna
 for (i in colnames(music_dataset)){
-boxplot(music_dataset[[i]],
-        main = paste("Boxplot", i),
-        xlab = "values",
-        ylab =  i,
-        col = "cyan",
-        border = "blue",
-        horizontal = TRUE,
-        notch = FALSE
-)}
+if(is.numeric(music_dataset[[i]])){
+  boxplot(music_dataset[[i]],
+          main = paste("Boxplot", i),
+          xlab = "values",
+          ylab =  i,
+          col = "cyan",
+          border = "blue",
+          horizontal = TRUE,
+          notch = FALSE
+  )}}
 
 head(music_dataset)
 z_scores = as.data.frame(sapply(music_dataset, function(music_dataset) (abs(music_dataset-mean(music_dataset))/sd(music_dataset))))
 no_outliers = z_scores[!rowSums(z_scores>3), ]
 head(no_outliers)
 
-
 # Shuffle del dataset
+
 music_dataset = music_dataset[sample(1:nrow(music_dataset)), ]
 
-# Normalizzazione del dataset per tutte le features con dominio numerico
-
-process <- preProcess(as.data.frame(music_dataset), method=c("range"))
-
-music_dataset <- predict(process, as.data.frame(music_dataset))
 
 # Visualizzazione istogrammi per ogni feature
 
@@ -162,8 +175,10 @@ hist(music_dataset$speechiness, freq=F, main="Istogramma speechiness", xlab="spe
 hist(music_dataset$tempo, freq=F, main="Istogramma tempo", xlab="tempo", col = "blue")
 hist(music_dataset$valence, freq=F, main="Istogramma valence", xlab="valence", col = "orange")
 
+glimpse(music_dataset)
+
 # TESTING:
-music_dataset <- music_dataset[, c("speechiness","tempo","key","mode","loudness", "music_genre")]
+#music_dataset <- music_dataset[, c("danceability","acousticness","instrumentalness","energy","loudness","key","liveness","music_genre")]
 
 # Split del dataset in:
 # training_set: 65%
@@ -187,7 +202,7 @@ dim(validation_set)
 # PCA sul traninig_set
 
 pca_set = training_set[,-14]
-res.pca <- PCA(pca_set, scale.unit = TRUE, ncp = 5, graph = TRUE)
+res.pca <- PCA(pca_set, scale.unit = TRUE, ncp = 5, graph = FALSE)
 
 # autovalori
 eig.val <- get_eigenvalue(res.pca)
@@ -195,6 +210,10 @@ eig.val
 # var
 var <- get_pca_var(res.pca)
 var
+
+dev.off() 
+# Corr circle
+fviz_pca_var(res.pca, col.var = "black")
 
 # Scree plot
 fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50))
@@ -215,12 +234,11 @@ fviz_pca_ind(res.pca,
              title = "Contrb by each music genre"
 )
 
-# Biplot identificazione top features
+# Biplot identificazione top features (PC1)
 
-top_features <- fviz_pca_biplot(res.pca, select.ind = list(contrib = 5),
+top_features_pc1 <- fviz_pca_biplot(res.pca, select.ind = list(contrib = 5),
                                 select.var = list(contrib = 5))
-
-top_features
+top_features_pc1
 
 par(mfrow=c(2,3))
 plot(training_set$danceability, main="Danzabilità", col="green") 
@@ -257,7 +275,6 @@ svm.table=table(svm.pred, testing_set$music_genre)
 svm.table
 accuracy.SVM <- sum(diag(svm.table))/sum(svm.table)
 print(accuracy.SVM)
-
 
 
 # svm.confusionMatrix
