@@ -7,6 +7,8 @@
 #install.packages('MLmetrics')
 #install.packages("magrittr") 
 #install.packages("tidyverse")
+#install.packages("multiROC")
+#install.packages('pROC')
 library(MLmetrics)
 library(FactoMineR)
 library(factoextra)
@@ -19,7 +21,10 @@ library(corrplot)
 library(neuralnet)
 library(tidyr)
 library(magrittr)
-library(tidyverse) 
+library(tidyverse)
+library(pROC)
+
+
 
 ### Machine Learning - Progetto [Music-Genre-Prediction]
 ## Salvatore Marotta 844795
@@ -70,7 +75,7 @@ dim(music_dataset)
 
 # Labels del genere musicale e distrubuzione dei generi musicali nel df
 
-lables <- unique(music_dataset$music_genre)
+labels <- unique(music_dataset$music_genre)
 
 table(music_dataset$music_genre)
 
@@ -123,7 +128,7 @@ dim(music_dataset[rowSums(is.na(music_dataset)) > 0, ])
 music_dataset %>% drop_na()
 
 
-# Normalizzazione del dataset per tutte le features con dominio numerico
+# Standardizzazione del dataset per tutte le features con dominio numerico
 
 process <- preProcess(as.data.frame(music_dataset), method=c("center", "scale"))
 
@@ -243,16 +248,15 @@ top_features_pc1 <- fviz_pca_biplot(res.pca, select.ind = list(contrib = 5),
 top_features_pc1
 
 par(mfrow=c(2,3))
-plot(training_set$danceability, main="Danzabilità", col="green") 
-plot(training_set$acousticness, main="Acustica", col="red")
-plot(training_set$instrumentalness, main="Strumentalità", col="blue")
-plot(training_set$energy, main="Energia", col="orange")
-plot(training_set$loudness, main="Rumorosità", col="black")
+plot(training_set$danceability[1:2000], main="Danzabilità", col="green") 
+plot(training_set$acousticness[1:2000], main="Acustica", col="red")
+plot(training_set$instrumentalness[1:2000], main="Strumentalità", col="blue")
+plot(training_set$energy[1:2000], main="Energia", col="orange")
+plot(training_set$loudness[1:2000], main="Rumorosità", col="black")
 
 
 ## Primo modello : SVM
-
-svm.model = svm(music_genre ~ ., data=training_set, kernel='radial', cost=1)
+svm.model = svm(music_genre ~ ., data=training_set, kernel='radial', cost=1, gamma=0.1, probability=TRUE)
 summary(svm.model)
 
 ## Secondo modello: Random Forest
@@ -262,12 +266,40 @@ summary(randomForest.model)
 
 ## Predictions
 
-svm.pred = predict(svm.model, testing_set)
+## La prediction della svm contiene anche l'attributo probabilità che verrà estratto per creare la curva ROC
+svm.pred <- predict(svm.model, testing_set, decision.values = TRUE, probability = TRUE)
+pred.prob = attr(svm.pred, "probabilities")
+pred.to.roc = pred.prob[, 10]
+print(pred.to.roc)
+
+## La prediction del random forest è suddiviso in due variabili, una verra utilizzata per la curva ROC
+## e l'altra per i valori di performance
 randomForest.pred = predict(randomForest.model, testing_set)
+randomForest.prob = predict(randomForest.model, testing_set, type = "prob")
+randomForest.to.roc = randomForest.prob[, 10]
+print(randomForest.to.roc)
 
-length(randomForest.pred)
-length(testing_set$music_genre)
 
+#Multiclass ROC Curve SVM and plot all the curves
+dev.off() 
+svm.roc = multiclass.roc(testing_set$music_genre, pred.to.roc, direction = ">", percent = TRUE)
+print(svm.roc$auc)
+
+svm.plots <- svm.roc[['rocs']]
+plot.roc(svm.plots[[1]], main="SVM ROCS")
+sapply(2:length(svm.plots),function(i) lines.roc(svm.plots[[i]],col=i))
+
+#Multiclass ROC Curve Random forest and plot all the curves
+randomForest.roc = multiclass.roc(testing_set$music_genre, randomForest.to.roc, direction = ">", percent = TRUE)
+print(randomForest.roc$auc)
+
+randomForest.plots <- randomForest.roc[['rocs']]
+plot.roc(randomForest.plots[[1]], main="RF ROCS")
+sapply(2:length(randomForest.plots),function(i) lines.roc(randomForest.plots[[i]],col=i))
+
+
+
+## Stampiamo le table con i valori Precision, Recall e F1 Measure per ogni label di entrambi i modelli
 randomForest.table = table(randomForest.pred, testing_set$music_genre)
 randomForest.table
 accuracy.RF <- sum(diag(randomForest.table))/sum(randomForest.table)
@@ -281,15 +313,16 @@ print(accuracy.SVM)
 
 # svm.confusionMatrix
 svm.confusionMatrix = confusionMatrix(svm.pred, testing_set$music_genre, mode = "everything") 
-print(svm.confusionMatrix)
+print(svm.confusionMatrix$byClass[, 5:7])
 svm.confusionMatrix$overall[1]
 
 # randomForest.confusionMatrix
-randomForest.confusionMatrix = confusionMatrix(randomForest.pred, testing_set$music_genre, mode = "everything") 
+randomForest.confusionMatrix = confusionMatrix(randomForest.pred, testing_set$music_genre, mode = "everything")
+print(randomForest.confusionMatrix$byClass[, 5:7])
 randomForest.confusionMatrix$overall[1]
 
 
-## K-Fold Cross Validation method
+## K-Fold Cross Validation method on SVM model
 # Setting a seed (reproduce results)
 # K = 10
 set.seed(123)
@@ -305,6 +338,8 @@ eachfold <- pred %>%
   summarise_at(vars(equal),                     
                list(Accuracy = mean))              
 eachfold
+
+
 
 ## Neural network
 #training_set_nn <- data.frame(training_set$danceability, training_set$acousticness, training_set$instrumentalness, training_set$energy, training_set$loudness, training_set$key, training_set$liveness, training_set$music_genre)
